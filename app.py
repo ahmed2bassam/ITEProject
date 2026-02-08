@@ -8,29 +8,38 @@ load_dotenv()
 
 app = Flask(__name__)
 
+# -------- Configuration --------
+
 PORT = int(os.getenv("PORT", "5000"))
 API_KEY = os.getenv("API_KEY")
 DATA_FILE = os.getenv("DATA_FILE", "./data/db.json")
 
+# -------- Helper Functions --------
+
+# Get current UTC time in ISO format
 def now():
     return datetime.utcnow().isoformat() + "Z"
 
+# Ensure the database file exists
 def ensure_db():
     os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
     if not os.path.exists(DATA_FILE):
         with open(DATA_FILE, "w", encoding="utf-8") as f:
             json.dump({"products": [], "orders": []}, f, indent=2)
 
+# Read the database from file
 def read_db():
     ensure_db()
     with open(DATA_FILE, "r", encoding="utf-8") as f:
         return json.load(f)
 
+# Write the database to file
 def write_db(db):
     ensure_db()
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(db, f, indent=2)
 
+# API Key authentication
 def require_api_key():
     if not API_KEY:
         return jsonify({"error": "Server misconfigured: API_KEY missing"}), 500
@@ -39,10 +48,22 @@ def require_api_key():
         return jsonify({"error": "Unauthorized: invalid or missing API key"}), 401
     return None
 
+# -------- Endpoints --------
+
+#root endpoint
+@app.get("/")
+def index():
+    return jsonify({
+        "message": "API is running",
+        "endpoints": ["/health", "/api/products", "/api/orders"]
+    })
+
+# Health check endpoint
 @app.get("/health")
 def health():
     return jsonify({"status": "ok", "time": now()})
 
+# Authentication guard for /api routes
 @app.before_request
 def auth_guard():
     # Only protect /api routes
@@ -57,6 +78,7 @@ def list_products():
     db = read_db()
     return jsonify(db["products"])
 
+# Get a single product by ID
 @app.get("/api/products/<pid>")
 def get_product(pid):
     db = read_db()
@@ -65,6 +87,7 @@ def get_product(pid):
             return jsonify(p)
     return jsonify({"error": "Product not found"}), 404
 
+# Create a new product
 @app.post("/api/products")
 def create_product():
     payload = request.get_json(silent=True) or {}
@@ -78,6 +101,7 @@ def create_product():
     write_db(db)
     return jsonify(created), 201
 
+# Update an existing product
 @app.put("/api/products/<pid>")
 def update_product(pid):
     payload = request.get_json(silent=True) or {}
@@ -93,6 +117,7 @@ def update_product(pid):
             return jsonify(p)
     return jsonify({"error": "Product not found"}), 404
 
+# Delete a product
 @app.delete("/api/products/<pid>")
 def delete_product(pid):
     db = read_db()
@@ -104,11 +129,14 @@ def delete_product(pid):
     return ("", 204)
 
 # -------- Orders --------
+
+# List all orders
 @app.get("/api/orders")
 def list_orders():
     db = read_db()
     return jsonify(db["orders"])
 
+# Get a single order by ID
 @app.get("/api/orders/<oid>")
 def get_order(oid):
     db = read_db()
@@ -117,6 +145,7 @@ def get_order(oid):
             return jsonify(o)
     return jsonify({"error": "Order not found"}), 404
 
+# Create a new order
 @app.post("/api/orders")
 def create_order():
     payload = request.get_json(silent=True) or {}
@@ -125,6 +154,7 @@ def create_order():
     if not customer or not isinstance(items, list):
         return jsonify({"error": "customer and items[] are required"}), 400
 
+# Create the order
     db = read_db()
     created = {
         "id": str(uuid4()),
@@ -137,6 +167,7 @@ def create_order():
     write_db(db)
     return jsonify(created), 201
 
+# Update an existing order
 @app.put("/api/orders/<oid>")
 def update_order(oid):
     payload = request.get_json(silent=True) or {}
@@ -153,6 +184,7 @@ def update_order(oid):
             return jsonify(o)
     return jsonify({"error": "Order not found"}), 404
 
+# Delete an order
 @app.delete("/api/orders/<oid>")
 def delete_order(oid):
     db = read_db()
@@ -163,5 +195,6 @@ def delete_order(oid):
     write_db(db)
     return ("", 204)
 
+# -------- Run Server --------
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=PORT)

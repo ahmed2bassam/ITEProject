@@ -1,0 +1,26 @@
+name: EC2 Auto-Deploy
+on:
+  push:
+    branches: [ main ] # Triggered whenever you push to main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: SSH and Update Server
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HOST_IP }}
+          username: ubuntu
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            cd ~/ITEProject
+            git pull origin main
+            source venv/bin/activate
+            pip install -r requirements.txt
+            # Restart the app (Assuming you use nohup)
+            pkill -f app.py || true
+            nohup python3 app.py > log.txt 2>&1 &
